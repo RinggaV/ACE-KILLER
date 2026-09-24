@@ -26,6 +26,7 @@ from core.system_utils import enable_auto_start, disable_auto_start
 from utils.memory_cleaner import get_memory_cleaner
 from utils.process_io_priority import get_io_priority_manager, IO_PRIORITY_HINT
 from ui.process_io_priority_manager import show_process_io_priority_manager
+from ui.disk_priority_manager import show_disk_priority_manager
 from ui.components.custom_titlebar import CustomTitleBar
 from ui.styles import (
     ColorScheme, StyleHelper, theme_manager, StatusHTMLGenerator, StyleApplier,
@@ -260,6 +261,12 @@ class MainWindow(QWidget):
         self.manage_io_list_btn.clicked.connect(self.show_auto_optimize_tab)
         self.manage_io_list_btn.setToolTip("查看和管理自动优化列表")
         main_buttons_layout.addWidget(self.manage_io_list_btn)
+
+        # 磁盘优先级按钮
+        self.disk_priority_btn = QPushButton("💾 磁盘优先级")
+        self.disk_priority_btn.clicked.connect(self.show_disk_priority)
+        self.disk_priority_btn.setToolTip("把目标磁盘的 I/O 优先级降到最低（System Informer 同款卷优先级）")
+        main_buttons_layout.addWidget(self.disk_priority_btn)
         
         main_buttons_layout.addStretch()
         io_priority_layout.addLayout(main_buttons_layout)
@@ -808,6 +815,8 @@ class MainWindow(QWidget):
                 StyleHelper.set_button_type(self.optimize_anticheat_btn, "success")
             if hasattr(self, 'manage_io_list_btn'):
                 StyleHelper.set_button_type(self.manage_io_list_btn, "default")
+            if hasattr(self, 'disk_priority_btn'):
+                StyleHelper.set_button_type(self.disk_priority_btn, "warning")
             
             # 内存清理按钮
             if hasattr(self, 'clean_workingset_btn'):
@@ -2108,6 +2117,12 @@ class MainWindow(QWidget):
         """显示进程I/O优先级管理器"""
         show_process_io_priority_manager(self, self.monitor.config_manager)
         # 刷新状态显示，因为用户可能在管理器中做了修改
+        self.update_status()
+
+    @Slot()
+    def show_disk_priority(self):
+        """显示磁盘优先级管理器，将目标磁盘降为最低"""
+        show_disk_priority_manager(self, self.monitor.config_manager)
         self.update_status()
 
     @Slot()

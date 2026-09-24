@@ -15,6 +15,7 @@ from core.system_utils import run_as_admin, check_single_instance
 from utils.logger import setup_logger, logger
 from utils.notification import find_icon_path, send_notification, create_notification_thread
 from utils.process_io_priority import get_io_priority_service
+from utils.disk_priority import get_disk_priority_service
 
 from ui.main_window import create_gui
 
@@ -46,6 +47,10 @@ def main():
     # 创建并启动I/O优先级服务
     io_priority_service = get_io_priority_service(config_manager)
     io_priority_service.start_service()
+
+    # 创建并启动磁盘优先级服务（把配置中的目标磁盘持续降到最低）
+    disk_priority_service = get_disk_priority_service(config_manager)
+    disk_priority_service.start_service()
     
     # 现在日志系统已初始化，可以记录启动信息
     logger.debug("🟩 ACE-KILLER 程序已启动！")
@@ -93,6 +98,10 @@ def main():
         # 停止I/O优先级服务
         if io_priority_service and io_priority_service.running:
             io_priority_service.stop_service()
+
+        # 停止磁盘优先级服务
+        if disk_priority_service and disk_priority_service.running:
+            disk_priority_service.stop_service()
             
         # 设置通知线程停止事件
         stop_event.set()

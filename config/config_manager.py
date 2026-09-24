@@ -41,6 +41,9 @@ class ConfigManager:
         # I/O优先级设置
         self.io_priority_processes = []  # 需要自动设置I/O优先级的进程名列表，格式为[{"name": "进程名", "priority": 0}]
 
+        # 需要持续降到最低 I/O 优先级的磁盘盘符，如 ["D", "E"]
+        self.lowest_priority_disks = []
+
         # 确保配置目录存在
         self._ensure_directories()
 
@@ -88,6 +91,7 @@ class ConfigManager:
             "io_priority": {
                 "processes": [{"name": "SGuard64.exe", "priority": 0}, {"name": "ACE-Tray.exe", "priority": 0}]
             },
+            "disk_priority": {"lowest": []},
         }
 
         # 如果配置文件存在，则读取
@@ -198,6 +202,17 @@ class ConfigManager:
                     self.io_priority_processes = config_data["io_priority"]["processes"]
                     logger.debug(f"已从配置文件加载I/O优先级设置，进程数量: {len(self.io_priority_processes)}")
 
+                # 读取磁盘最低优先级列表
+                if "disk_priority" in config_data and isinstance(config_data["disk_priority"], dict):
+                    lowest = config_data["disk_priority"].get("lowest", [])
+                    if isinstance(lowest, list):
+                        self.lowest_priority_disks = [
+                            str(letter).strip().rstrip(":\\").upper()
+                            for letter in lowest
+                            if str(letter).strip()
+                        ]
+                        logger.debug(f"已从配置文件加载磁盘最低优先级列表: {self.lowest_priority_disks}")
+
                 logger.debug("配置文件加载成功")
                 return True
             except Exception as e:
@@ -251,6 +266,9 @@ class ConfigManager:
             if "io_priority" in default_config and "processes" in default_config["io_priority"]:
                 self.io_priority_processes = default_config["io_priority"]["processes"]
 
+            if "disk_priority" in default_config:
+                self.lowest_priority_disks = list(default_config["disk_priority"].get("lowest", []))
+
             logger.debug("已创建并加载默认配置")
         except Exception as e:
             logger.error(f"创建默认配置文件失败: {str(e)}")
@@ -286,6 +304,7 @@ class ConfigManager:
                     "cooldown": self.memory_cleaner_cooldown,
                 },
                 "io_priority": {"processes": self.io_priority_processes},
+                "disk_priority": {"lowest": self.lowest_priority_disks},
             }
 
             # 保存到文件
