@@ -2,19 +2,15 @@ name: 构建和发布ACE-KILLER
 
 permissions:
   contents: write
-  packages: write
 
 on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - "VERSION"
+      - "utils/version_checker.py"
   workflow_dispatch:
-    inputs:
-      version:
-        description: "版本号 (例如: 1.0.0)"
-        required: true
-        default: "1.1.4"
-      release_notes:
-        description: "发布说明"
-        required: false
-        default: "此版本包含性能改进和错误修复"
 
 jobs:
   build:
@@ -30,7 +26,52 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: 计算版本号和更新说明
+        id: release
+        shell: pwsh
+        run: |
+          $tags = git tag --list "v*" | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' }
+          $latest = $tags |
+            ForEach-Object { [version]$_.Substring(1) } |
+            Sort-Object |
+            Select-Object -Last 1
+
+          if ($latest) {
+            $version = "$($latest.Major).$($latest.Minor).$($latest.Build + 1)"
+          } else {
+            $version = "1.1.4"
+          }
+
+          $previous = if ($latest) { "v$latest" } else { "" }
+          if ($previous -and (git rev-parse --verify $previous 2>$null)) {
+            $commits = git log "$previous..HEAD" --pretty=format:"%s"
+          } else {
+            $commits = git log -1 --pretty=format:"%s"
+          }
+
+          $notes = foreach ($line in ($commits -split "`n")) {
+            $subject = $line.Trim()
+            if (-not $subject) { continue }
+            $kind = if ($subject -match '^(?i)(feat|fix|perf|refactor|docs|style|test|chore|build|ci)(\(.+?\))?!?:') {
+              $Matches[1].ToLower()
+            } else {
+              "chore"
+            }
+            "- **${kind}:** $subject"
+          }
+          if (-not $notes) {
+            $notes = @("- **chore:** 版本更新")
+          }
+
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "notes<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          $notes | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "版本号: $version"
+          Write-Host ($notes -join "`n")
 
       - name: 设置Python
         uses: actions/setup-python@v5
@@ -54,63 +95,38 @@ jobs:
 
       - name: 安装Python依赖
         run: |
-          Write-Host "📦 安装Python依赖..."
-
           python -m pip install --upgrade pip wheel --quiet
           pip install -r requirements.txt --quiet
-          Write-Host "✅ Python依赖安装完成"
 
       - name: 准备构建环境
+        shell: pwsh
         run: |
-          Write-Host "🔧 准备构建环境..."
+          $version = "${{ steps.release.outputs.version }}"
 
-          # 更新版本号
-          echo "${{ github.event.inputs.version }}" | Out-File -FilePath "VERSION" -Encoding utf8 -NoNewline
-          Write-Host "✅ 已更新 VERSION 文件为: ${{ github.event.inputs.version }}"
+          [System.IO.File]::WriteAllText("$PWD\VERSION", $version)
 
-          # 更新 utils/version_checker.py 中的版本号
           $versionCheckerPath = "utils/version_checker.py"
-          if (Test-Path $versionCheckerPath) {
-            (Get-Content -Path $versionCheckerPath -Raw) -replace '__version__ = ".*"', '__version__ = "${{ github.event.inputs.version }}"' | Set-Content -Path $versionCheckerPath -Encoding utf8
-            Write-Host "✅ 已更新 version_checker.py 中的版本号"
-          }
+          $content = Get-Content -Path $versionCheckerPath -Raw -Encoding utf8
+          $content = $content -replace '__version__ = ".*"', ('__version__ = "' + $version + '"')
+          [System.IO.File]::WriteAllText("$PWD\$versionCheckerPath", $content)
+          Write-Host "已写入版本号: $version"
 
-          # 清理构建文件
           @("main.dist", "main.build", "main.onefile-build", "nuitka-crash-report.xml") | ForEach-Object {
             if (Test-Path $_) { Remove-Item -Recurse -Force $_ }
           }
-
-          # 清理Python缓存
-          Get-ChildItem -Path . -Recurse -Name "__pycache__" -ErrorAction SilentlyContinue | ForEach-Object { 
-            try { Remove-Item -Recurse -Force $_ } catch { Write-Warning "无法删除: $_" }
-          }
-
-          Write-Host "✅ 构建环境准备完成"
-        shell: pwsh
+          Get-ChildItem -Path . -Recurse -Directory -Filter "__pycache__" -ErrorAction SilentlyContinue |
+            ForEach-Object { Remove-Item -Recurse -Force $_.FullName -ErrorAction SilentlyContinue }
 
       - name: 使用Nuitka打包应用程序
+        shell: pwsh
         run: |
-          # 包体积优化说明：
-          # 1. --nofollow-import-to: 排除大量不需要的Python库和模块
-          # 2. --python-flag=no_docstrings: 移除文档字符串以减小体积
-          # 3. --python-flag=no_asserts: 移除断言语句以减小体积
-          # 4. --disable-ccache: 禁用编译器缓存以确保最优化构建
-          
-          # 检查资源文件
           $icon_path = "assets/icon/favicon.ico"
           if (-not (Test-Path $icon_path)) {
-            Write-Warning "⚠️ 主图标文件不存在: $icon_path"
-          } else {
-            Write-Host "✅ 找到主图标文件: $icon_path"
+            Write-Warning "主图标文件不存在: $icon_path"
           }
-
           if (-not (Test-Path "assets/icon")) {
-            Write-Error "❌ assets/icon目录不存在"
+            Write-Error "assets/icon目录不存在"
             exit 1
-          } else {
-            Write-Host "✅ 找到assets/icon资源目录"
-            Write-Host "📁 assets/icon目录内容:"
-            Get-ChildItem -Recurse "assets/icon" | Format-Table Name, FullName -AutoSize
           }
 
           python -m nuitka --standalone `
@@ -144,95 +160,52 @@ jobs:
             --disable-ccache `
             --report=compilation-report.xml `
             main.py
-        shell: pwsh
-        env:
-          PYTHONIOENCODING: utf-8
-          PYTHONLEGACYWINDOWSSTDIO: 1
 
       - name: 验证构建结果
-        run: |
-          Write-Host "🔍 验证构建结果..."
-
-          # 检查关键文件
-          $checks = @(
-            @{ Path = "VERSION"; Name = "版本文件" },
-            @{ Path = "compilation-report.xml"; Name = "编译报告" },
-            @{ Path = "main.dist"; Name = "构建目录" },
-            @{ Path = "main.dist/ACE-KILLER.exe"; Name = "可执行文件" }
-          )
-
-          foreach ($check in $checks) {
-            if (Test-Path $check.Path) {
-              if ($check.Path -eq "main.dist/ACE-KILLER.exe") {
-                $fileInfo = Get-Item $check.Path
-                $fileSizeMB = [math]::Round($fileInfo.Length / 1MB, 2)
-                Write-Host "✅ $($check.Name) (大小: ${fileSizeMB} MB)"
-              } else {
-                Write-Host "✅ $($check.Name)"
-              }
-            } else {
-              Write-Error "❌ $($check.Name) 未找到: $($check.Path)"
-              if ($check.Path -eq "main.dist/ACE-KILLER.exe") { exit 1 }
-            }
-          }
-
-          Write-Host "🎉 构建验证完成！"
         shell: pwsh
+        run: |
+          if (-not (Test-Path "main.dist/ACE-KILLER.exe")) {
+            Write-Error "未生成 main.dist/ACE-KILLER.exe"
+            exit 1
+          }
+          $fileSizeMB = [math]::Round((Get-Item "main.dist/ACE-KILLER.exe").Length / 1MB, 2)
+          Write-Host "ACE-KILLER.exe 大小: ${fileSizeMB} MB"
 
       - name: 上传编译报告
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: compilation-report-v${{ github.event.inputs.version }}
+          name: compilation-report-v${{ steps.release.outputs.version }}
           path: compilation-report.xml
           retention-days: 30
 
       - name: 压缩可执行文件目录
-        run: |
-          $dist_dir = "main.dist"
-          $zip_name = "ACE-KILLER-v${{ github.event.inputs.version }}-x64"
-          $zip_path = "$zip_name.zip"
-
-          if (Test-Path $dist_dir) {
-            Compress-Archive -Path "$dist_dir/*" -DestinationPath $zip_path -Force
-            if (Test-Path $zip_path) {
-              $size_mb = (Get-Item $zip_path).Length / 1MB
-              Write-Host "✅ 成功创建 $zip_path (大小: $([math]::Round($size_mb, 2)) MB)"
-            } else {
-              throw "压缩失败，未生成ZIP文件"
-            }
-          } else {
-            throw "构建目录不存在，构建可能失败"
-          }
         shell: pwsh
+        run: |
+          $zip_path = "ACE-KILLER-v${{ steps.release.outputs.version }}-x64.zip"
+          Compress-Archive -Path "main.dist/*" -DestinationPath $zip_path -Force
+          if (-not (Test-Path $zip_path)) {
+            throw "压缩失败，未生成ZIP文件"
+          }
 
       - name: 创建发布
-        id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: ACE-KILLER v${{ github.event.inputs.version }}
+          tag_name: v${{ steps.release.outputs.version }}
+          name: ACE-KILLER v${{ steps.release.outputs.version }}
           body: |
-            ### 🚀 更新日志
-            ${{ github.event.inputs.release_notes }}
+            ### 更新日志
+            ${{ steps.release.outputs.notes }}
 
-            ### 📥 安装说明
+            ### 安装说明
             1. 下载 zip 压缩包文件
             2. 解压到任意目录
             3. 右键点击 `ACE-KILLER.exe`，选择"以管理员身份运行"
 
-            ### ⚠️ 系统要求
+            ### 系统要求
             - Windows 10/11 x64
             - 需要管理员权限
-
-            ### 🔍 如何检查更新
-            1. 打开程序主界面
-            2. 切换到"设置"选项卡
-            3. 点击"检查更新"按钮
-            4. 如有新版本会自动提示并可直接跳转下载
-            
-          # 添加覆盖选项
           draft: false
           prerelease: false
           files: |
-            ACE-KILLER-v${{ github.event.inputs.version }}-x64.zip
+            ACE-KILLER-v${{ steps.release.outputs.version }}-x64.zip
