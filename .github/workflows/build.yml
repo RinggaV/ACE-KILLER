@@ -138,10 +138,17 @@ jobs:
             --windows-uac-admin `
             --remove-output `
             --enable-plugin=pyside6 `
+            --include-qt-plugins=platforms,styles,iconengines,imageformats `
+            --noinclude-dlls=Qt6Network.dll `
+            --noinclude-dlls=opengl32sw.dll `
             --lto=yes `
             --jobs=$env:NUMBER_OF_PROCESSORS `
             --output-filename=ACE-KILLER.exe `
-            --nofollow-import-to=tkinter,numpy,scipy,matplotlib,PIL.ImageTk `
+            --nofollow-import-to=tkinter,unittest,pydoc,doctest,lib2to3,ensurepip,venv,distutils `
+            --nofollow-import-to=numpy,scipy,matplotlib,PIL,setuptools,pip,wheel `
+            --nofollow-import-to=pytest,IPython,notebook,pandas,cryptography `
+            --nofollow-import-to=xmlrpc,curses,readline,multiprocessing `
+            --include-module=multiprocessing `
             --nofollow-import-to=PySide6.QtWebEngineWidgets `
             --nofollow-import-to=PySide6.Qt3DCore `
             --nofollow-import-to=PySide6.Qt3DRender `
@@ -152,6 +159,33 @@ jobs:
             --nofollow-import-to=PySide6.QtBluetooth `
             --nofollow-import-to=PySide6.QtSerialPort `
             --nofollow-import-to=PySide6.QtLocation `
+            --nofollow-import-to=PySide6.QtNetwork `
+            --nofollow-import-to=PySide6.QtQml `
+            --nofollow-import-to=PySide6.QtQuick `
+            --nofollow-import-to=PySide6.QtPdf `
+            --nofollow-import-to=PySide6.QtSvg `
+            --nofollow-import-to=PySide6.QtSql `
+            --nofollow-import-to=PySide6.QtTest `
+            --nofollow-import-to=PySide6.QtOpenGL `
+            --nofollow-import-to=PySide6.QtDBus `
+            --nofollow-import-to=PySide6.QtDesigner `
+            --nofollow-import-to=PySide6.QtHelp `
+            --nofollow-import-to=PySide6.QtUiTools `
+            --nofollow-import-to=PySide6.QtXml `
+            --nofollow-import-to=PySide6.QtConcurrent `
+            --nofollow-import-to=PySide6.QtPrintSupport `
+            --nofollow-import-to=PySide6.QtOpenGLWidgets `
+            --nofollow-import-to=PySide6.QtWebChannel `
+            --nofollow-import-to=PySide6.QtWebSockets `
+            --nofollow-import-to=PySide6.QtHttpServer `
+            --nofollow-import-to=PySide6.QtRemoteObjects `
+            --nofollow-import-to=PySide6.QtSensors `
+            --nofollow-import-to=PySide6.QtSpatialAudio `
+            --nofollow-import-to=PySide6.QtStateMachine `
+            --nofollow-import-to=PySide6.QtTextToSpeech `
+            --nofollow-import-to=PySide6.QtNfc `
+            --nofollow-import-to=PySide6.QtWebEngineCore `
+            --nofollow-import-to=PySide6.QtWebEngineQuick `
             --prefer-source-code `
             --python-flag=no_site `
             --python-flag=no_warnings `
