@@ -2008,10 +2008,15 @@ class MainWindow(QWidget):
             
             # 设置为很低优先级和效能模式
             success_count, count = io_manager.set_process_io_priority_by_name(
-                process_name, 
+                process_name,
                 IO_PRIORITY_HINT.IoPriorityVeryLow,
                 PERFORMANCE_MODE.ECO_MODE
             )
+
+            # 扫盘进程额外降低自己的磁盘读写优先级，减轻后台扫盘对其他程序的影响
+            if process_name.lower() == "sguard64.exe" and count > 0:
+                from utils.disk_priority import get_process_disk_priority
+                get_process_disk_priority().set_process_disk_priority_by_name(process_name)
             
             if count > 0:
                 total_processes += count
