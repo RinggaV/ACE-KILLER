@@ -147,8 +147,7 @@ jobs:
             --nofollow-import-to=tkinter,unittest,pydoc,doctest,lib2to3,ensurepip,venv,distutils `
             --nofollow-import-to=numpy,scipy,matplotlib,PIL,setuptools,pip,wheel `
             --nofollow-import-to=pytest,IPython,notebook,pandas,cryptography `
-            --nofollow-import-to=xmlrpc,curses,readline,multiprocessing `
-            --include-module=multiprocessing `
+            --nofollow-import-to=xmlrpc,curses,readline `
             --nofollow-import-to=PySide6.QtWebEngineWidgets `
             --nofollow-import-to=PySide6.Qt3DCore `
             --nofollow-import-to=PySide6.Qt3DRender `
